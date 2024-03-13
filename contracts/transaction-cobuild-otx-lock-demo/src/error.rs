@@ -13,6 +13,10 @@ pub enum Error {
     WrongSighashAll,
     WrongWitnessLayout,
     WrongOtxStart,
+    WrongOtx,
+    NoSealFound,
+    ScriptHashAbsent,
+    WrongCount,
 }
 
 impl From<SysError> for Error {
@@ -36,6 +40,11 @@ impl From<ckb_transaction_cobuild::Error> for Error {
             ckb_transaction_cobuild::Error::WrongSighashAll => Error::WrongSighashAll,
             ckb_transaction_cobuild::Error::WrongWitnessLayout => Error::WrongWitnessLayout,
             ckb_transaction_cobuild::Error::WrongOtxStart => Error::WrongOtxStart,
+            ckb_transaction_cobuild::Error::AuthError => Error::AuthError,
+            ckb_transaction_cobuild::Error::WrongOtx => Error::WrongOtx,
+            ckb_transaction_cobuild::Error::NoSealFound => Error::NoSealFound,
+            ckb_transaction_cobuild::Error::ScriptHashAbsent => Error::ScriptHashAbsent,
+            ckb_transaction_cobuild::Error::WrongCount => Error::WrongCount,
         }
     }
 }
