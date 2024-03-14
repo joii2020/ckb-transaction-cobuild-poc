@@ -1,6 +1,7 @@
 [workspace]
 members = ["ckb-transaction-cobuild", "contracts/transaction-cobuild-lock-demo", "contracts/transaction-cobuild-type-demo", "contracts/transaction-cobuild-otx-lock-demo"]
 exclude = ["tests"]
+resolver = "2"
 
 [profile.release]
 overflow-checks = true

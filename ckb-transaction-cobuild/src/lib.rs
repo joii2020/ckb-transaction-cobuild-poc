@@ -282,7 +282,7 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
                     .message()
                     .actions()
                     .iter()
-                    .map(|pair| pair.script_hash().raw_data().clone().try_into().unwrap())
+                    .map(|pair| pair.script_hash().raw_data().try_into().unwrap())
                     .collect();
                 check_script_hashes(action_hashes)?;
 
