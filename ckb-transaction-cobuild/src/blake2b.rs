@@ -5,22 +5,51 @@ pub const PERSONALIZATION_SIGHASH_ALL_ONLY: &[u8] = b"ckb-tcob-sgohash";
 pub const PERSONALIZATION_OTX: &[u8] = b"ckb-tcob-otxhash";
 
 /// return a blake2b instance with personalization for SighashAll
-pub fn new_sighash_all_blake2b() -> Blake2b {
-    Blake2bBuilder::new(32)
-        .personal(PERSONALIZATION_SIGHASH_ALL)
-        .build()
+pub fn new_sighash_all_blake2b() -> Blake2bStatistics {
+    Blake2bStatistics::new(
+        Blake2bBuilder::new(32)
+            .personal(PERSONALIZATION_SIGHASH_ALL)
+            .build(),
+    )
 }
 
 /// return a blake2b instance with personalization for SighashAllOnly
-pub fn new_sighash_all_only_blake2b() -> Blake2b {
-    Blake2bBuilder::new(32)
-        .personal(PERSONALIZATION_SIGHASH_ALL_ONLY)
-        .build()
+pub fn new_sighash_all_only_blake2b() -> Blake2bStatistics {
+    Blake2bStatistics::new(
+        Blake2bBuilder::new(32)
+            .personal(PERSONALIZATION_SIGHASH_ALL_ONLY)
+            .build(),
+    )
 }
 
 /// return a blake2b instance with personalization for OTX
-pub fn new_otx_blake2b() -> Blake2b {
-    Blake2bBuilder::new(32)
-        .personal(PERSONALIZATION_OTX)
-        .build()
+pub fn new_otx_blake2b() -> Blake2bStatistics {
+    Blake2bStatistics::new(
+        Blake2bBuilder::new(32)
+            .personal(PERSONALIZATION_OTX)
+            .build(),
+    )
+}
+
+pub struct Blake2bStatistics {
+    count: usize,
+    blake2b: Blake2b,
+}
+
+impl Blake2bStatistics {
+    pub fn new(blake2b: Blake2b) -> Self {
+        Self { count: 0, blake2b }
+    }
+
+    pub fn update(&mut self, data: &[u8]) {
+        self.blake2b.update(data);
+        self.count += data.len();
+    }
+
+    pub fn finalize(self, dst: &mut [u8]) {
+        self.blake2b.finalize(dst)
+    }
+    pub fn count(&self) -> usize {
+        self.count
+    }
 }

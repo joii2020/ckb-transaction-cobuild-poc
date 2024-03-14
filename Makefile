@@ -19,3 +19,7 @@ install:
 ci:
 	capsule build --release
 	cd tests && cargo test && cd ..
+
+debug:
+	capsule build --release
+	cd tests && RUST_LOG=debug cargo test -- --nocapture && cd ..

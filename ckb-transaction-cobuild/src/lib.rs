@@ -1,6 +1,7 @@
 #![no_std]
 extern crate alloc;
 pub mod blake2b;
+pub mod log;
 pub mod schemas;
 
 use alloc::{collections::BTreeSet, vec::Vec};
@@ -8,13 +9,12 @@ use blake2b::{new_otx_blake2b, new_sighash_all_blake2b, new_sighash_all_only_bla
 use ckb_gen_types::prelude::Unpack;
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::packed::CellInput,
+    ckb_types::packed::{CellInput, Transaction},
     error::SysError,
     high_level::{
-        self, load_cell, load_cell_data, load_cell_lock_hash, load_cell_type_hash,
-        load_script_hash, load_tx_hash, load_witness, QueryIter,
+        load_cell, load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_script_hash,
+        load_transaction, load_tx_hash, load_witness, QueryIter,
     },
-    syscalls::load_transaction,
 };
 use core::convert::Into;
 use molecule::{
@@ -24,7 +24,7 @@ use molecule::{
 };
 use schemas::{
     basic::{Message, OtxStart},
-    top_level::{WitnessLayoutReader, WitnessLayoutUnionReader},
+    top_level::{WitnessLayout, WitnessLayoutReader, WitnessLayoutUnion, WitnessLayoutUnionReader},
 };
 
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
@@ -164,7 +164,13 @@ fn generate_signing_message_hash(message: &Option<Message>) -> Result<[u8; 32], 
     }
 
     let mut result = [0u8; 32];
+    let count = hasher.count();
     hasher.finalize(&mut result);
+    log!(
+        "generate_signing_message_hash totally hashed {} bytes, hash = {:?}",
+        count,
+        result
+    );
     Ok(result)
 }
 
@@ -176,7 +182,7 @@ fn generate_signing_message_hash(message: &Option<Message>) -> Result<[u8; 32], 
 ///
 fn calculate_inputs_len() -> Result<usize, SysError> {
     let mut offsets = [0u8; 8];
-    match load_transaction(&mut offsets, 28) {
+    match ckb_std::syscalls::load_transaction(&mut offsets, 28) {
         // this syscall will always return SysError::LengthNotEnough since we only load 8 bytes, let's ignore it
         Err(SysError::LengthNotEnough(_)) => {}
         Err(SysError::Unknown(e)) => return Err(SysError::Unknown(e)),
@@ -187,18 +193,28 @@ fn calculate_inputs_len() -> Result<usize, SysError> {
     Ok((outputs_offset as usize - inputs_offset as usize - NUMBER_SIZE) / CellInput::TOTAL_SIZE)
 }
 
-///
-/// parse transaction with message and return 2 values:
-/// 1. signing_message_hash, 32 bytes message for signature verification
-/// 2. seal, seal field in SighashAll or SighashAllOnly. Normally as signature.
-/// This function is mainly used by lock script
-///
-pub fn parse_message() -> Result<([u8; 32], Vec<u8>), Error> {
+pub fn cobuild_normal_entry<F: Callback>(verifier: F) -> Result<(), Error> {
     check_others_in_group()?;
     let message = fetch_message()?;
     let signing_message_hash = generate_signing_message_hash(&message)?;
     let seal = fetch_seal()?;
-    Ok((signing_message_hash, seal))
+    verifier.invoke(&seal, &signing_message_hash)?;
+    Ok(())
+}
+
+///
+/// Parse all witness into WitnessLayout structure if possible. It is none if
+/// isn't. For example, if it is a WitnessArgs structure, it is none. The second
+/// value indicates the cobuild is activated or not.
+///
+pub fn parse_witness_layouts(tx: &Transaction) -> (Vec<Option<WitnessLayout>>, bool) {
+    let witness_layouts: Vec<Option<WitnessLayout>> = tx
+        .witnesses()
+        .into_iter()
+        .map(|w| WitnessLayout::from_slice(&w.raw_data()).ok())
+        .collect();
+    let activated = witness_layouts.iter().any(|w| w.is_some());
+    (witness_layouts, activated)
 }
 
 ///
@@ -206,171 +222,244 @@ pub fn parse_message() -> Result<([u8; 32], Vec<u8>), Error> {
 /// This function is mainly used by lock script
 ///
 pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
+    let tx = load_transaction()?;
+    let raw_tx = tx.raw();
+
+    let (witness_layouts, cobuild_activated) = parse_witness_layouts(&tx);
+    if !cobuild_activated {
+        return Ok(false);
+    }
+
     let current_script_hash = load_script_hash()?;
-    let (otx_start, start_index) = fetch_otx_start()?;
+    let (otx_start, i) = fetch_otx_start()?;
+    if otx_start.is_none() {
+        log!("No OTX detected");
+        cobuild_normal_entry(verifier)?;
+        return Ok(true);
+    }
+    let otx_start = otx_start.unwrap();
+
     let start_input_cell: u32 = otx_start.start_input_cell().unpack();
     let start_output_cell: u32 = otx_start.start_output_cell().unpack();
     let start_cell_deps: u32 = otx_start.start_cell_deps().unpack();
     let start_header_deps: u32 = otx_start.start_header_deps().unpack();
 
-    let mut input_cell_counter = start_input_cell as usize;
-    let mut output_cell_counter = start_output_cell as usize;
-    let mut cell_deps_counter = start_cell_deps as usize;
-    let mut header_deps_counter = start_header_deps as usize;
-    let mut witness_counter = start_index + 1 as usize;
+    // ie = input end
+    // is = input start
+    // oe = output end
+    // os = output start
+    // ce = cell deps end
+    // cs = cell deps start
+    // he = header dep end
+    // hs = header dep start
+    let mut ie = start_input_cell as usize;
+    let is = ie;
+    let mut oe = start_output_cell as usize;
+    let _os = oe;
+    let mut ce = start_cell_deps as usize;
+    let _cs = ce;
+    let mut he = start_header_deps as usize;
+    let _hs = he;
+    let mut execution_count: usize = 0;
+    let mut otx_count = 0;
+    for witness in witness_layouts.iter().skip(i + 1) {
+        if witness.is_none() {
+            break;
+        }
+        match witness.as_ref().unwrap().to_enum() {
+            WitnessLayoutUnion::Otx(otx) => {
+                otx_count += 1;
+                let input_cells: u32 = otx.input_cells().unpack();
+                let output_cells: u32 = otx.output_cells().unpack();
+                let cell_deps: u32 = otx.cell_deps().unpack();
+                let header_deps: u32 = otx.header_deps().unpack();
 
-    let tx = high_level::load_transaction()?;
-    let witness_iter = tx.witnesses().into_iter().skip(witness_counter);
-    let raw_tx = tx.raw();
-    for witness in witness_iter {
-        if let Ok(r) = WitnessLayoutReader::from_slice(&witness.raw_data()) {
-            match r.to_enum() {
-                WitnessLayoutUnionReader::Otx(otx) => {
-                    witness_counter += 1;
-                    let input_cells: u32 = otx.input_cells().unpack();
-                    let output_cells: u32 = otx.output_cells().unpack();
-                    let cell_deps: u32 = otx.cell_deps().unpack();
-                    let header_deps: u32 = otx.header_deps().unpack();
-
-                    if input_cells == 0 && output_cells == 0 && cell_deps == 0 && header_deps == 0 {
-                        return Err(Error::WrongCount);
-                    }
-                    let action_hashes: BTreeSet<[u8; 32]> = otx
-                        .message()
-                        .actions()
-                        .iter()
-                        .map(|pair| pair.script_hash().raw_data().clone().try_into().unwrap())
-                        .collect();
-                    check_script_hashes(action_hashes)?;
-
-                    let mut lock_hash_existing = false;
-                    let mut count = 0;
-                    for lock_hash in QueryIter::new(load_cell_lock_hash, Source::Input)
-                        .skip(input_cell_counter)
-                        .take(input_cells as usize)
-                    {
-                        if lock_hash == current_script_hash {
-                            lock_hash_existing = true;
-                        }
-                        count += 1;
-                    }
-                    // It's important to verify count. Suppose that the all
-                    // count(input_cells, output_cells, cell_deps, header_deps)
-                    // are zero due to `iterator::take` method. The hash result
-                    // can be a predictable.
-                    if count != input_cells {
-                        return Err(Error::WrongCount);
-                    }
-                    if !lock_hash_existing {
-                        input_cell_counter += input_cells as usize;
-                        output_cell_counter += output_cells as usize;
-                        cell_deps_counter += cell_deps as usize;
-                        header_deps_counter += header_deps as usize;
-                        continue;
-                    }
-                    let mut hasher = new_otx_blake2b();
-                    // message
-                    hasher.update(otx.message().as_slice());
-
-                    // otx inputs
-                    hasher.update(&input_cells.to_le_bytes());
-                    let input_iter = raw_tx
-                        .inputs()
-                        .into_iter()
-                        .skip(input_cell_counter)
-                        .zip(QueryIter::new(load_cell, Source::Input).skip(input_cell_counter))
-                        .zip(
-                            QueryIter::new(load_cell_data, Source::Input).skip(input_cell_counter),
-                        );
-                    let mut count = 0;
-                    for ((input, input_cell), input_cell_data) in
-                        input_iter.take(input_cells as usize)
-                    {
-                        hasher.update(input.as_slice());
-                        hasher.update(input_cell.as_slice());
-                        hasher.update(&(input_cell_data.len() as u32).to_le_bytes());
-                        hasher.update(&input_cell_data);
-                        count += 1;
-                    }
-                    if count != input_cells {
-                        return Err(Error::WrongCount);
-                    }
-                    input_cell_counter += input_cells as usize;
-
-                    // otx outputs
-                    hasher.update(&output_cells.to_le_bytes());
-                    let output_iter = raw_tx
-                        .outputs()
-                        .into_iter()
-                        .skip(output_cell_counter)
-                        .zip(raw_tx.outputs_data().into_iter().skip(output_cell_counter));
-                    let mut count = 0;
-                    for (output_cell, output_cell_data) in output_iter.take(output_cells as usize) {
-                        hasher.update(output_cell.as_slice());
-                        // according to the spec, we need to hash the output
-                        // data length first in little endian, then the data
-                        // itself. we are using molecule serialized slice
-                        // directly here, it's same as the spec.
-                        hasher.update(output_cell_data.as_slice());
-                        count += 1;
-                    }
-                    if count != output_cells {
-                        return Err(Error::WrongCount);
-                    }
-                    output_cell_counter += output_cells as usize;
-
-                    // otx cell deps
-                    hasher.update(&cell_deps.to_le_bytes());
-                    let cell_dep_iter = raw_tx.cell_deps().into_iter().skip(cell_deps_counter);
-                    let mut count = 0;
-                    for cell_dep in cell_dep_iter.take(cell_deps as usize) {
-                        hasher.update(cell_dep.as_slice());
-                        count += 1;
-                    }
-                    if count != cell_deps {
-                        return Err(Error::WrongCount);
-                    }
-                    cell_deps_counter += cell_deps as usize;
-
-                    // otx header deps
-                    hasher.update(&header_deps.to_le_bytes());
-                    let header_dep_iter =
-                        raw_tx.header_deps().into_iter().skip(header_deps_counter);
-                    let mut count = 0;
-                    for header_dep in header_dep_iter.take(header_deps as usize) {
-                        hasher.update(header_dep.as_slice());
-                        count += 1;
-                    }
-                    if count != header_deps {
-                        return Err(Error::WrongCount);
-                    }
-                    header_deps_counter += header_deps as usize;
-
-                    let mut result = [0u8; 32];
-                    hasher.finalize(&mut result);
-
-                    let mut found = false;
-                    for seal_pair in otx.seals().iter() {
-                        if seal_pair.script_hash().as_slice() == current_script_hash.as_slice() {
-                            verifier.invoke(&seal_pair.seal().raw_data(), &result)?;
-                            found = true;
-                        }
-                    }
-                    if !found {
-                        return Err(Error::NoSealFound);
-                    }
-                    // TODO: add step 7, step 8
+                if input_cells == 0 && output_cells == 0 && cell_deps == 0 && header_deps == 0 {
+                    return Err(Error::WrongCount);
                 }
-                WitnessLayoutUnionReader::SighashAll(_) => break,
-                WitnessLayoutUnionReader::SighashAllOnly(_) => break,
-                WitnessLayoutUnionReader::OtxStart(_) => break,
+                let action_hashes: BTreeSet<[u8; 32]> = otx
+                    .as_reader()
+                    .message()
+                    .actions()
+                    .iter()
+                    .map(|pair| pair.script_hash().raw_data().clone().try_into().unwrap())
+                    .collect();
+                check_script_hashes(action_hashes)?;
+
+                let mut lock_hash_existing = false;
+                let mut count = 0;
+                for lock_hash in QueryIter::new(load_cell_lock_hash, Source::Input)
+                    .skip(ie)
+                    .take(input_cells as usize)
+                {
+                    if lock_hash == current_script_hash {
+                        lock_hash_existing = true;
+                    }
+                    count += 1;
+                }
+                // It's important to verify count. Suppose that the all
+                // count(input_cells, output_cells, cell_deps, header_deps)
+                // are zero due to `iterator::take` method. The hash result
+                // can be a predictable.
+                if count != input_cells {
+                    return Err(Error::WrongCount);
+                }
+                if !lock_hash_existing {
+                    ie += input_cells as usize;
+                    oe += output_cells as usize;
+                    ce += cell_deps as usize;
+                    he += header_deps as usize;
+                    continue;
+                }
+                let smh = generate_otx_smh(&otx, &raw_tx, ie, oe, ce, he)?;
+
+                let mut found = false;
+                for seal_pair in otx.as_reader().seals().iter() {
+                    if seal_pair.script_hash().as_slice() == current_script_hash.as_slice() {
+                        verifier.invoke(&seal_pair.seal().raw_data(), &smh)?;
+                        found = true;
+                        execution_count += 1;
+                        break;
+                        // duplicated seals are ignored
+                    }
+                }
+                if !found {
+                    return Err(Error::NoSealFound);
+                }
+                // step 6.h
+                ie += input_cells as usize;
+                oe += output_cells as usize;
+                ce += cell_deps as usize;
+                he += header_deps as usize;
+            }
+            WitnessLayoutUnion::SighashAll(_) => break,
+            WitnessLayoutUnion::SighashAllOnly(_) => break,
+            WitnessLayoutUnion::OtxStart(_) => return Err(Error::WrongWitnessLayout),
+        }
+    } // end of step 6 loop
+      // step 7
+    let j = i + 1 + otx_count;
+    for index in 0..witness_layouts.len() {
+        // [0, i) [j, +infinity)
+        if index < i || index >= j {
+            if let Some(r) = &witness_layouts[index] {
+                match r.to_enum() {
+                    WitnessLayoutUnion::Otx(_) => {
+                        log!(
+                            "WrongWitnessLayout at index = {} (i = {}, j = {}, otx_count = {})",
+                            index,
+                            i,
+                            j,
+                            otx_count
+                        );
+                        return Err(Error::WrongWitnessLayout);
+                    }
+                    _ => {}
+                }
             }
         }
     }
+    // step 8
+    let mut found = false;
+    for index in 0..raw_tx.inputs().len() {
+        if index < is || index >= ie {
+            let hash = load_cell_lock_hash(index, Source::Input)?;
+            if hash == current_script_hash {
+                found = true;
+                break;
+            }
+        }
+    }
+    if found {
+        execution_count += 1;
+        log!("extra callback is invoked");
+        cobuild_normal_entry(verifier)?;
+    }
+    log!("execution_count = {}", execution_count);
     Ok(true)
 }
 
-fn fetch_otx_start() -> Result<(OtxStart, usize), Error> {
+/// generate OTX signing message hash
+fn generate_otx_smh(
+    otx: &schemas::basic::Otx,
+    raw_tx: &ckb_std::ckb_types::packed::RawTransaction,
+    ie: usize,
+    oe: usize,
+    ce: usize,
+    he: usize,
+) -> Result<[u8; 32], Error> {
+    let input_cells: u32 = otx.input_cells().unpack();
+    let output_cells: u32 = otx.output_cells().unpack();
+    let cell_deps: u32 = otx.cell_deps().unpack();
+    let header_deps: u32 = otx.header_deps().unpack();
+
+    let mut hasher = new_otx_blake2b();
+    hasher.update(otx.message().as_slice());
+    hasher.update(&input_cells.to_le_bytes());
+    let input_iter = raw_tx
+        .inputs()
+        .into_iter()
+        .skip(ie)
+        .zip(QueryIter::new(load_cell, Source::Input).skip(ie))
+        .zip(QueryIter::new(load_cell_data, Source::Input).skip(ie));
+    let mut count = 0;
+    for ((input, input_cell), input_cell_data) in input_iter.take(input_cells as usize) {
+        hasher.update(input.as_slice());
+        hasher.update(input_cell.as_slice());
+        hasher.update(&(input_cell_data.len() as u32).to_le_bytes());
+        hasher.update(&input_cell_data);
+        count += 1;
+    }
+    if count != input_cells {
+        return Err(Error::WrongCount);
+    }
+    hasher.update(&output_cells.to_le_bytes());
+    let output_iter = raw_tx
+        .outputs()
+        .into_iter()
+        .skip(oe)
+        .zip(raw_tx.outputs_data().into_iter().skip(oe));
+    let mut count = 0;
+    for (output_cell, output_cell_data) in output_iter.take(output_cells as usize) {
+        hasher.update(output_cell.as_slice());
+        hasher.update(output_cell_data.as_slice());
+        count += 1;
+    }
+    if count != output_cells {
+        return Err(Error::WrongCount);
+    }
+    hasher.update(&cell_deps.to_le_bytes());
+    let cell_dep_iter = raw_tx.cell_deps().into_iter().skip(ce);
+    let mut count = 0;
+    for cell_dep in cell_dep_iter.take(cell_deps as usize) {
+        hasher.update(cell_dep.as_slice());
+        count += 1;
+    }
+    if count != cell_deps {
+        return Err(Error::WrongCount);
+    }
+    hasher.update(&header_deps.to_le_bytes());
+    let header_dep_iter = raw_tx.header_deps().into_iter().skip(he);
+    let mut count = 0;
+    for header_dep in header_dep_iter.take(header_deps as usize) {
+        hasher.update(header_dep.as_slice());
+        count += 1;
+    }
+    if count != header_deps {
+        return Err(Error::WrongCount);
+    }
+    let mut result = [0u8; 32];
+    let count = hasher.count();
+    hasher.finalize(&mut result);
+    log!(
+        "generate_otx_smh totally hashed {} bytes and hash is {:?}",
+        count,
+        result
+    );
+    Ok(result)
+}
+
+fn fetch_otx_start() -> Result<(Option<OtxStart>, usize), Error> {
     let mut otx_start = None;
     let mut start_index = 0;
     let mut end_index = 0;
@@ -384,14 +473,17 @@ fn fetch_otx_start() -> Result<(OtxStart, usize), Error> {
                         start_index = i;
                         end_index = i;
                     } else {
+                        log!("Duplicated OtxStart found");
                         return Err(Error::WrongWitnessLayout);
                     }
                 }
                 WitnessLayoutUnionReader::Otx(_) => {
                     if otx_start.is_none() {
+                        log!("A Otx without OtxStart found");
                         return Err(Error::WrongWitnessLayout);
                     } else {
                         if end_index + 1 != i {
+                            log!("Otx are not continuous");
                             return Err(Error::WrongWitnessLayout);
                         } else {
                             end_index = i;
@@ -402,10 +494,14 @@ fn fetch_otx_start() -> Result<(OtxStart, usize), Error> {
             }
         }
     }
-    if let Some(otx_start) = otx_start {
+    if otx_start.is_some() {
         if end_index > 0 {
             return Ok((otx_start, start_index));
+        } else {
+            log!("end_index == 0, there is no OTX");
+            return Err(Error::WrongOtxStart);
         }
+    } else {
+        Ok((None, 0))
     }
-    Err(Error::WrongOtxStart)
 }
