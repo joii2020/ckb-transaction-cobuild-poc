@@ -226,14 +226,18 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
     let raw_tx = tx.raw();
 
     let (witness_layouts, cobuild_activated) = parse_witness_layouts(&tx);
+    // Legacy Flow Handling
     if !cobuild_activated {
         return Ok(false);
     }
 
     let current_script_hash = load_script_hash()?;
+    // step 2
+    // step 4
     let (otx_start, i) = fetch_otx_start()?;
     if otx_start.is_none() {
-        log!("No OTX detected");
+        // step 3
+        log!("No otx detected");
         cobuild_normal_entry(verifier)?;
         return Ok(true);
     }
@@ -244,6 +248,7 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
     let start_cell_deps: u32 = otx_start.start_cell_deps().unpack();
     let start_header_deps: u32 = otx_start.start_header_deps().unpack();
 
+    // abbrev. from spec:
     // ie = input end
     // is = input start
     // oe = output end
@@ -252,18 +257,22 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
     // cs = cell deps start
     // he = header dep end
     // hs = header dep start
+    // step 5
     let mut ie = start_input_cell as usize;
     let is = ie;
     let mut oe = start_output_cell as usize;
-    let _os = oe;
     let mut ce = start_cell_deps as usize;
-    let _cs = ce;
     let mut he = start_header_deps as usize;
-    let _hs = he;
     let mut execution_count: usize = 0;
     let mut otx_count = 0;
+    log!("ie = {}, oe = {}, ce = {}, he = {}", ie, oe, ce, he);
+    log!("Otx starts at index {}(inclusive)", i + 1);
+    // this index is always pointing to the current processing OTX witness.
+    let mut index = i;
     for witness in witness_layouts.iter().skip(i + 1) {
+        index += 1;
         if witness.is_none() {
+            // step 6, not WitnessLayoutOtx
             break;
         }
         match witness.as_ref().unwrap().to_enum() {
@@ -273,7 +282,7 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
                 let output_cells: u32 = otx.output_cells().unpack();
                 let cell_deps: u32 = otx.cell_deps().unpack();
                 let header_deps: u32 = otx.header_deps().unpack();
-
+                // step 6.b
                 if input_cells == 0 && output_cells == 0 && cell_deps == 0 && header_deps == 0 {
                     return Err(Error::WrongCount);
                 }
@@ -284,26 +293,13 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
                     .iter()
                     .map(|pair| pair.script_hash().raw_data().try_into().unwrap())
                     .collect();
+                // step 6.c
                 check_script_hashes(action_hashes)?;
-
-                let mut lock_hash_existing = false;
-                let mut count = 0;
-                for lock_hash in QueryIter::new(load_cell_lock_hash, Source::Input)
+                // step 6.d
+                let lock_hash_existing = QueryIter::new(load_cell_lock_hash, Source::Input)
                     .skip(ie)
                     .take(input_cells as usize)
-                {
-                    if lock_hash == current_script_hash {
-                        lock_hash_existing = true;
-                    }
-                    count += 1;
-                }
-                // It's important to verify count. Suppose that the all
-                // count(input_cells, output_cells, cell_deps, header_deps)
-                // are zero due to `iterator::take` method. The hash result
-                // can be a predictable.
-                if count != input_cells {
-                    return Err(Error::WrongCount);
-                }
+                    .any(|hash| hash == current_script_hash);
                 if !lock_hash_existing {
                     ie += input_cells as usize;
                     oe += output_cells as usize;
@@ -311,19 +307,21 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
                     he += header_deps as usize;
                     continue;
                 }
+                // step 6.e
                 let smh = generate_otx_smh(&otx, &raw_tx, ie, oe, ce, he)?;
-
-                let mut found = false;
+                // step 6.f
+                let mut seal_found = false;
                 for seal_pair in otx.as_reader().seals().iter() {
                     if seal_pair.script_hash().as_slice() == current_script_hash.as_slice() {
                         verifier.invoke(&seal_pair.seal().raw_data(), &smh)?;
-                        found = true;
+                        seal_found = true;
                         execution_count += 1;
                         break;
                         // duplicated seals are ignored
                     }
                 }
-                if !found {
+                if !seal_found {
+                    log!("seal can't be found");
                     return Err(Error::NoSealFound);
                 }
                 // step 6.h
@@ -332,13 +330,16 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
                 ce += cell_deps as usize;
                 he += header_deps as usize;
             }
+            // step 6
             WitnessLayoutUnion::SighashAll(_) => break,
             WitnessLayoutUnion::SighashAllOnly(_) => break,
             WitnessLayoutUnion::OtxStart(_) => return Err(Error::WrongWitnessLayout),
         }
     } // end of step 6 loop
       // step 7
-    let j = i + 1 + otx_count;
+      // after the loop, the `index` points to the first non OTX witness
+    let j = index + 1;
+    log!("the first non OTX witness is at index {}", j);
     for index in 0..witness_layouts.len() {
         // [0, i) [j, +infinity)
         if index < i || index >= j {
@@ -362,6 +363,8 @@ pub fn cobuild_entry<F: Callback>(verifier: F) -> Result<bool, Error> {
     // step 8
     let mut found = false;
     for index in 0..raw_tx.inputs().len() {
+        // scan all input cell in [0, is) and [ie, +infinity)
+        // if is == ie, it is always true
         if index < is || index >= ie {
             let hash = load_cell_lock_hash(index, Source::Input)?;
             if hash == current_script_hash {
@@ -388,6 +391,7 @@ fn generate_otx_smh(
     ce: usize,
     he: usize,
 ) -> Result<[u8; 32], Error> {
+    log!("ie = {}, oe = {}, ce = {}, he = {}", ie, oe, ce, he);
     let input_cells: u32 = otx.input_cells().unpack();
     let output_cells: u32 = otx.output_cells().unpack();
     let cell_deps: u32 = otx.cell_deps().unpack();
@@ -410,6 +414,9 @@ fn generate_otx_smh(
         hasher.update(&input_cell_data);
         count += 1;
     }
+    // It's important to verify count. Consider the scenario that the all
+    // count(input_cells, output_cells, cell_deps, header_deps) are zero due to
+    // `iterator::take` method. The hash result can be a predictable.
     if count != input_cells {
         return Err(Error::WrongCount);
     }
