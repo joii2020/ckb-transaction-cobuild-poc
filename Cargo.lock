@@ -3,6 +3,13 @@
 version = 3
 
 [[package]]
+name = "always-success"
+version = "0.1.0"
+dependencies = [
+ "ckb-std 0.15.1",
+]
+
+[[package]]
 name = "blake2b-ref"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -40,7 +47,7 @@ name = "ckb-auth-rs"
 version = "0.1.0"
 source = "git+https://github.com/nervosnetwork/ckb-auth.git?rev=df6e9ef#df6e9ef0e7ef3c83b6165e1ba180bf5a84a882ad"
 dependencies = [
- "ckb-std",
+ "ckb-std 0.14.3",
  "hex",
  "log",
 ]
@@ -53,6 +60,26 @@ checksum = "a3bc54ca99b09e1eb5fc6c49bb1156644ce57fce9c6f52b5c13110b9a3143f7e"
 dependencies = [
  "cfg-if",
  "molecule",
+]
+
+[[package]]
+name = "ckb-gen-types"
+version = "0.112.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a12020d50dd3757cde0fdc88d3837b7a2ab503fe38bd11be86ddace11318c77"
+dependencies = [
+ "cfg-if",
+ "ckb-hash",
+ "molecule",
+]
+
+[[package]]
+name = "ckb-hash"
+version = "0.112.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25af660fc8746f7c756444e6aa47ede9a874206563b6a1ce1b230a5b86519392"
+dependencies = [
+ "blake2b-ref",
 ]
 
 [[package]]
@@ -78,14 +105,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-std"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6f72eb58dfefcc444621dc97020ef96af0636aa59e26b9c110359cb6e37db59"
+dependencies = [
+ "buddy-alloc",
+ "cc",
+ "ckb-gen-types 0.112.1",
+ "gcd",
+]
+
+[[package]]
 name = "ckb-transaction-cobuild"
 version = "0.1.0"
 dependencies = [
  "blake2b-ref",
- "ckb-gen-types",
- "ckb-std",
+ "ckb-gen-types 0.111.0",
+ "ckb-std 0.14.3",
  "molecule",
 ]
+
+[[package]]
+name = "gcd"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d758ba1b47b00caf47f24925c0074ecb20d6dfcffe7f6d53395c0465674841a"
 
 [[package]]
 name = "hex"
@@ -120,7 +165,7 @@ version = "0.1.0"
 dependencies = [
  "blake2b-ref",
  "ckb-auth-rs",
- "ckb-std",
+ "ckb-std 0.14.3",
  "ckb-transaction-cobuild",
  "molecule",
 ]
@@ -131,7 +176,7 @@ version = "0.1.0"
 dependencies = [
  "blake2b-ref",
  "ckb-auth-rs",
- "ckb-std",
+ "ckb-std 0.14.3",
  "ckb-transaction-cobuild",
  "molecule",
 ]
@@ -140,6 +185,6 @@ dependencies = [
 name = "transaction-cobuild-type-demo"
 version = "0.1.0"
 dependencies = [
- "ckb-std",
+ "ckb-std 0.14.3",
  "ckb-transaction-cobuild",
 ]
