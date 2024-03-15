@@ -9,6 +9,9 @@ pub mod tx;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod test_otx;
+
 const TEST_ENV_VAR: &str = "CAPSULE_TEST_ENV";
 
 pub enum TestEnv {
