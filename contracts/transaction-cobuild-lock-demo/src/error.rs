@@ -17,6 +17,7 @@ pub enum Error {
     NoSealFound,
     ScriptHashAbsent,
     WrongCount,
+    LazyReader,
 }
 
 impl From<SysError> for Error {
@@ -32,19 +33,20 @@ impl From<SysError> for Error {
     }
 }
 
-impl From<ckb_transaction_cobuild::Error> for Error {
-    fn from(err: ckb_transaction_cobuild::Error) -> Self {
+impl From<ckb_transaction_cobuild::error::Error> for Error {
+    fn from(err: ckb_transaction_cobuild::error::Error) -> Self {
         match err {
-            ckb_transaction_cobuild::Error::Sys(e) => e.into(),
-            ckb_transaction_cobuild::Error::MoleculeEncoding => Error::Encoding,
-            ckb_transaction_cobuild::Error::WrongSighashAll => Error::WrongSighashAll,
-            ckb_transaction_cobuild::Error::WrongWitnessLayout => Error::WrongWitnessLayout,
-            ckb_transaction_cobuild::Error::WrongOtxStart => Error::WrongOtxStart,
-            ckb_transaction_cobuild::Error::AuthError => Error::AuthError,
-            ckb_transaction_cobuild::Error::WrongOtx => Error::WrongOtx,
-            ckb_transaction_cobuild::Error::NoSealFound => Error::NoSealFound,
-            ckb_transaction_cobuild::Error::ScriptHashAbsent => Error::ScriptHashAbsent,
-            ckb_transaction_cobuild::Error::WrongCount => Error::WrongCount,
+            ckb_transaction_cobuild::error::Error::Sys(e) => e.into(),
+            ckb_transaction_cobuild::error::Error::MoleculeEncoding => Error::Encoding,
+            ckb_transaction_cobuild::error::Error::WrongSighashAll => Error::WrongSighashAll,
+            ckb_transaction_cobuild::error::Error::WrongWitnessLayout => Error::WrongWitnessLayout,
+            ckb_transaction_cobuild::error::Error::WrongOtxStart => Error::WrongOtxStart,
+            ckb_transaction_cobuild::error::Error::AuthError => Error::AuthError,
+            ckb_transaction_cobuild::error::Error::WrongOtx => Error::WrongOtx,
+            ckb_transaction_cobuild::error::Error::NoSealFound => Error::NoSealFound,
+            ckb_transaction_cobuild::error::Error::ScriptHashAbsent => Error::ScriptHashAbsent,
+            ckb_transaction_cobuild::error::Error::WrongCount => Error::WrongCount,
+            ckb_transaction_cobuild::error::Error::LazyReader(_) => Error::LazyReader,
         }
     }
 }

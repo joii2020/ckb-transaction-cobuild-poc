@@ -32,9 +32,9 @@ impl Callback for Verifier {
         &self,
         seal: &[u8],
         signing_message_hash: &[u8; 32],
-    ) -> Result<(), ckb_transaction_cobuild::Error> {
+    ) -> Result<(), ckb_transaction_cobuild::error::Error> {
         ckb_auth(&self.entry, &self.id, seal, signing_message_hash)
-            .map_err(|_| ckb_transaction_cobuild::Error::AuthError)?;
+            .map_err(|_| ckb_transaction_cobuild::error::Error::AuthError)?;
         Ok(())
     }
 }

@@ -32,11 +32,11 @@ impl Callback for Verifier {
         &self,
         seal: &[u8],
         signing_message_hash: &[u8; 32],
-    ) -> Result<(), ckb_transaction_cobuild::Error> {
+    ) -> Result<(), ckb_transaction_cobuild::error::Error> {
         let auth_result = ckb_auth(&self.entry, &self.id, seal, signing_message_hash);
         match auth_result {
             Ok(_) => Ok(()),
-            Err(_) => Err(ckb_transaction_cobuild::Error::AuthError),
+            Err(_) => Err(ckb_transaction_cobuild::error::Error::AuthError),
         }
     }
 }

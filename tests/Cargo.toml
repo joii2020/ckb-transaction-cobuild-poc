@@ -11,3 +11,6 @@ ckb-testtool = "0.10"
 ckb-auth-rs = { git = "https://github.com/nervosnetwork/ckb-auth.git", rev="df6e9ef"}
 rand = "0.6.5"
 molecule = { version = "0.7.5", default-features = false }
+
+[patch.crates-io]
+molecule = { path = "../../molecule/bindings/rust" }

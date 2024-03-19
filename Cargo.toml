@@ -17,3 +17,6 @@ opt-level = 1
 debug = false
 panic = 'abort'
 debug-assertions = true
+
+[patch.crates-io]
+molecule = { path = "../molecule/bindings/rust" }
