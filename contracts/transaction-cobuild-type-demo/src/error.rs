@@ -29,13 +29,13 @@ impl From<SysError> for Error {
 }
 
 impl From<CobuildError> for Error {
-    fn from(err: CobuildError) -> Self {
+    fn from(_: CobuildError) -> Self {
         Self::CobuildError
     }
 }
 
 impl From<LazyReaderError> for Error {
-    fn from(err: LazyReaderError) -> Self {
+    fn from(_: LazyReaderError) -> Self {
         Self::LazyReaderError
     }
 }

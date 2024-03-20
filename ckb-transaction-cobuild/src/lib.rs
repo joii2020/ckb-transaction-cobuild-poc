@@ -13,8 +13,7 @@ use ckb_std::{
     ckb_constants::Source,
     error::SysError,
     high_level::{
-        load_cell_lock_hash, load_cell_type_hash, load_script_hash, load_tx_hash, load_witness,
-        QueryIter,
+        load_cell_lock_hash, load_cell_type_hash, load_script_hash, load_tx_hash, QueryIter,
     },
     syscalls,
 };
@@ -24,8 +23,7 @@ use schemas2::basic::Message;
 pub use schemas2::{basic, blockchain, top_level};
 
 use core::convert::Into;
-use molecule::{lazy_reader::Cursor, prelude::Reader};
-use schemas::top_level::{WitnessLayoutReader, WitnessLayoutUnionReader};
+use molecule::lazy_reader::Cursor;
 
 use crate::lazy_reader::new_input_cell_data;
 

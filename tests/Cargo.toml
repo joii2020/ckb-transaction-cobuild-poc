@@ -13,4 +13,4 @@ rand = "0.6.5"
 molecule = { version = "0.7.5", default-features = false }
 
 [patch.crates-io]
-molecule = { path = "../../molecule/bindings/rust" }
+molecule = { git = "https://github.com/XuJiandong/molecule.git", rev = "785a309" }

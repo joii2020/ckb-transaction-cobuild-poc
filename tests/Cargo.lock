@@ -834,6 +834,7 @@ dependencies = [
 [[package]]
 name = "molecule"
 version = "0.7.5"
+source = "git+https://github.com/XuJiandong/molecule.git?rev=785a309#785a3092d6a6210c37a16afb6b80535a50df7324"
 dependencies = [
  "bytes",
  "cfg-if",

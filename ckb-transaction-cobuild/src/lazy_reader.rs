@@ -1,6 +1,6 @@
 use core::cmp::min;
 
-use super::schemas2::{basic, blockchain, top_level};
+use super::schemas2::blockchain;
 use crate::log;
 use alloc::boxed::Box;
 use ckb_std::{ckb_constants::Source, error::SysError, syscalls};
