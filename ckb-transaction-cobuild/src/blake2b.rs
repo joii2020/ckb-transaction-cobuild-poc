@@ -53,7 +53,7 @@ impl Blake2bStatistics {
         while cursor.size > 0 {
             let read_len = cursor.read_at(&mut buf).unwrap();
             if read_len > 0 {
-                self.blake2b.update(&buf[0..read_len]);
+                self.update(&buf[0..read_len]);
                 cursor = cursor.slice_by_start(read_len).unwrap();
             }
         }

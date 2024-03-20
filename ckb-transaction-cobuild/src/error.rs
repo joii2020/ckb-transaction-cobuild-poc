@@ -1,6 +1,6 @@
 use ckb_std::error::SysError;
 use molecule::error::VerificationError;
-use molecule::lazy_reader::Error as LazyReaderError;
+pub use molecule::lazy_reader::Error as LazyReaderError;
 
 #[derive(Debug)]
 pub enum Error {

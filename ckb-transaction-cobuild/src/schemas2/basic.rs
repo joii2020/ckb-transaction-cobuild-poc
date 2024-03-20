@@ -2,6 +2,7 @@ extern crate alloc;
 use super::blockchain::*;
 use core::convert::TryInto;
 use molecule::lazy_reader::{Cursor, Error, NUMBER_SIZE};
+#[derive(Clone)]
 pub struct Hash {
     pub cursor: Cursor,
 }
@@ -27,6 +28,7 @@ impl Hash {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct String {
     pub cursor: Cursor,
 }
@@ -116,6 +118,7 @@ impl From<Cursor> for Uint32Opt {
         Self { cursor }
     }
 }
+#[derive(Clone)]
 pub struct Action {
     pub cursor: Cursor,
 }
@@ -150,6 +153,7 @@ impl Action {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct ActionVec {
     pub cursor: Cursor,
 }
@@ -234,6 +238,7 @@ impl ActionVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Message {
     pub cursor: Cursor,
 }
@@ -255,6 +260,7 @@ impl Message {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct ScriptInfo {
     pub cursor: Cursor,
 }
@@ -300,6 +306,7 @@ impl ScriptInfo {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct ScriptInfoVec {
     pub cursor: Cursor,
 }
@@ -384,6 +391,7 @@ impl ScriptInfoVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct ResolvedInputs {
     pub cursor: Cursor,
 }
@@ -412,6 +420,7 @@ impl ResolvedInputs {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct BuildingPacketV1 {
     pub cursor: Cursor,
 }
@@ -497,6 +506,7 @@ impl BuildingPacket {
         }
     }
 }
+#[derive(Clone)]
 pub struct SighashAll {
     pub cursor: Cursor,
 }
@@ -524,6 +534,7 @@ impl SighashAll {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct SighashAllOnly {
     pub cursor: Cursor,
 }
@@ -544,6 +555,7 @@ impl SighashAllOnly {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct SealPair {
     pub cursor: Cursor,
 }
@@ -571,6 +583,7 @@ impl SealPair {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct SealPairVec {
     pub cursor: Cursor,
 }
@@ -655,6 +668,7 @@ impl SealPairVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct OtxStart {
     pub cursor: Cursor,
 }
@@ -693,6 +707,7 @@ impl OtxStart {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Otx {
     pub cursor: Cursor,
 }

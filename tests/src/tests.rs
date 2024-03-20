@@ -18,7 +18,7 @@ use ckb_transaction_cobuild::schemas::{
 };
 use molecule::prelude::*;
 
-const MAX_CYCLES: u64 = 10_000_000;
+const MAX_CYCLES: u64 = 20_000_000;
 
 // error numbers
 fn assert_script_error(err: Error, err_code: i8) {

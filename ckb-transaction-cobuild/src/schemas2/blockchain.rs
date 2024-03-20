@@ -1,6 +1,7 @@
 extern crate alloc;
 use core::convert::TryInto;
 use molecule::lazy_reader::{Cursor, Error, NUMBER_SIZE};
+#[derive(Clone)]
 pub struct Uint32 {
     pub cursor: Cursor,
 }
@@ -26,6 +27,7 @@ impl Uint32 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Uint64 {
     pub cursor: Cursor,
 }
@@ -51,6 +53,7 @@ impl Uint64 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Uint128 {
     pub cursor: Cursor,
 }
@@ -76,6 +79,7 @@ impl Uint128 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Byte32 {
     pub cursor: Cursor,
 }
@@ -101,6 +105,7 @@ impl Byte32 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Uint256 {
     pub cursor: Cursor,
 }
@@ -126,6 +131,7 @@ impl Uint256 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Bytes {
     pub cursor: Cursor,
 }
@@ -215,6 +221,7 @@ impl From<Cursor> for BytesOpt {
         Self { cursor }
     }
 }
+#[derive(Clone)]
 pub struct BytesOptVec {
     pub cursor: Cursor,
 }
@@ -301,6 +308,7 @@ impl BytesOptVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct BytesVec {
     pub cursor: Cursor,
 }
@@ -382,6 +390,7 @@ impl BytesVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Byte32Vec {
     pub cursor: Cursor,
 }
@@ -471,6 +480,7 @@ impl From<Cursor> for ScriptOpt {
         Self { cursor }
     }
 }
+#[derive(Clone)]
 pub struct ProposalShortId {
     pub cursor: Cursor,
 }
@@ -496,6 +506,7 @@ impl ProposalShortId {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct UncleBlockVec {
     pub cursor: Cursor,
 }
@@ -580,6 +591,7 @@ impl UncleBlockVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct TransactionVec {
     pub cursor: Cursor,
 }
@@ -664,6 +676,7 @@ impl TransactionVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct ProposalShortIdVec {
     pub cursor: Cursor,
 }
@@ -745,6 +758,7 @@ impl ProposalShortIdVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellDepVec {
     pub cursor: Cursor,
 }
@@ -826,6 +840,7 @@ impl CellDepVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellInputVec {
     pub cursor: Cursor,
 }
@@ -907,6 +922,7 @@ impl CellInputVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellOutputVec {
     pub cursor: Cursor,
 }
@@ -991,6 +1007,7 @@ impl CellOutputVec {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Script {
     pub cursor: Cursor,
 }
@@ -1024,6 +1041,7 @@ impl Script {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct OutPoint {
     pub cursor: Cursor,
 }
@@ -1051,6 +1069,7 @@ impl OutPoint {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellInput {
     pub cursor: Cursor,
 }
@@ -1078,6 +1097,7 @@ impl CellInput {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellOutput {
     pub cursor: Cursor,
 }
@@ -1120,6 +1140,7 @@ impl CellOutput {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellDep {
     pub cursor: Cursor,
 }
@@ -1147,6 +1168,7 @@ impl CellDep {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct RawTransaction {
     pub cursor: Cursor,
 }
@@ -1199,6 +1221,7 @@ impl RawTransaction {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Transaction {
     pub cursor: Cursor,
 }
@@ -1227,6 +1250,7 @@ impl Transaction {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct RawHeader {
     pub cursor: Cursor,
 }
@@ -1306,6 +1330,7 @@ impl RawHeader {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Header {
     pub cursor: Cursor,
 }
@@ -1334,6 +1359,7 @@ impl Header {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct UncleBlock {
     pub cursor: Cursor,
 }
@@ -1361,6 +1387,7 @@ impl UncleBlock {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct Block {
     pub cursor: Cursor,
 }
@@ -1402,6 +1429,7 @@ impl Block {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct BlockV1 {
     pub cursor: Cursor,
 }
@@ -1449,6 +1477,7 @@ impl BlockV1 {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct CellbaseWitness {
     pub cursor: Cursor,
 }
@@ -1476,6 +1505,7 @@ impl CellbaseWitness {
         Ok(())
     }
 }
+#[derive(Clone)]
 pub struct WitnessArgs {
     pub cursor: Cursor,
 }
