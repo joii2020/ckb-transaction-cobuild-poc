@@ -950,7 +950,11 @@ fn merge_tx(
 fn test_cobuild_otx_simple() {
     let mut dl = Resource::default();
     let mut px = Pickaxer::default();
-    let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]);
+    let tx = assemble_otx(vec![
+        generate_otx_a0(&mut dl, &mut px),
+        generate_otx_b0(&mut dl, &mut px),
+        generate_otx_c0(&mut dl, &mut px),
+    ]);
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
     verifier.verify(&tx, &dl).unwrap();
