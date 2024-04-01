@@ -1064,7 +1064,14 @@ fn test_cobuild_otx_simple() {
     let tx = assemble_otx(vec![generate_otx_a0(&mut dl, &mut px)]);
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
+
+    const CONSUME_CYCLES: u64 = 3430000;
+    let cycles = verifier.verify(&tx, &dl).unwrap();
+    println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 150000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 fn new_otx_prefix_tx() -> (ckb_types::core::TransactionView, Resource) {
@@ -1146,7 +1153,14 @@ fn test_cobuild_otx_prefix() {
     let (tx, dl) = new_otx_prefix_tx();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
+
+    const CONSUME_CYCLES: u64 = 10540000;
+    let cycles = verifier.verify(&tx, &dl).unwrap();
+    println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 150000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]
@@ -1261,7 +1275,14 @@ fn test_cobuild_otx_prefix_and_suffix() {
     let tx = tx_builder.build();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
-    verifier.verify(&tx, &dl).unwrap();
+
+    const CONSUME_CYCLES: u64 = 10540000;
+    let cycles = verifier.verify(&tx, &dl).unwrap();
+    println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 150000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]

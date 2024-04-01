@@ -42,11 +42,17 @@ fn test_success_sighash_all() {
     // deploy contract
     let (tx, resolved_inputs, context) = gen_tx(&witnesses);
     let tx = sign_tx(&mut witnesses, tx, resolved_inputs);
+
     // run
+    const CONSUME_CYCLES: u64 = 10000000;
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
     println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 100000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]
@@ -128,9 +134,15 @@ fn test_success_with_other_witnesslayout() {
     let (tx, resolved_inputs, context) = gen_tx(&witnesses);
     let tx = sign_tx(&mut witnesses, tx, resolved_inputs);
     // run
-    let _cycles = context
+    const CONSUME_CYCLES: u64 = 10080000;
+    let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
+    println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 100000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]
@@ -187,11 +199,17 @@ fn test_success_sighash_all_only() {
     // deploy contract
     let (tx, resolved_inputs, context) = gen_tx(&witnesses);
     let tx = sign_tx(&mut witnesses, tx, resolved_inputs);
+
     // run
+    const CONSUME_CYCLES: u64 = 9780000;
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
     println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 100000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]
@@ -226,10 +244,15 @@ fn test_type_script() {
 
     let tx = sign_tx(&mut witnesses, tx, resolved_inputs);
     // run
+    const CONSUME_CYCLES: u64 = 10000000;
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
     println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 100000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 #[test]
@@ -346,10 +369,15 @@ fn test_success_otx() {
         .as_advanced_builder()
         .set_witnesses(vec![witness1, witness2])
         .build();
+    const CONSUME_CYCLES: u64 = 3310000;
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
     println!("consume cycles: {}", cycles);
+    if cycles > (CONSUME_CYCLES + 100000) {
+        println!("the cycles is: {}", cycles);
+        assert!(false);
+    }
 }
 
 fn generate_otx_signing_message_hash(
