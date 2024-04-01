@@ -997,7 +997,13 @@ fn generate_otx_a5_fail(dl: &mut Resource, px: &mut Pickaxer) -> ckb_types::core
 }
 
 fn assemble_otx(otxs: Vec<ckb_types::core::TransactionView>) -> ckb_types::core::TransactionView {
-    let tx_builder = ckb_types::core::TransactionBuilder::default();
+    assemble_otx_with_txbuilder(otxs, ckb_types::core::TransactionBuilder::default()).build()
+}
+
+fn assemble_otx_with_txbuilder(
+    otxs: Vec<ckb_types::core::TransactionView>,
+    tx_builder: ckb_types::core::TransactionBuilder,
+) -> ckb_types::core::TransactionBuilder {
     let os = schemas::basic::OtxStart::new_builder().build();
     let wl = schemas::top_level::WitnessLayout::new_builder()
         .set(os)
@@ -1024,7 +1030,7 @@ fn assemble_otx(otxs: Vec<ckb_types::core::TransactionView>) -> ckb_types::core:
         }
     }
 
-    tx_builder.build()
+    tx_builder
 }
 
 fn merge_bytesvec<T1: IntoIterator, T2: Clone + From<<T1 as IntoIterator>::Item>>(
@@ -1061,8 +1067,7 @@ fn test_cobuild_otx_simple() {
     verifier.verify(&tx, &dl).unwrap();
 }
 
-#[test]
-fn test_cobuild_otx_prefix() {
+fn new_otx_prefix_tx() -> (ckb_types::core::TransactionView, Resource) {
     let mut dl = Resource::default();
     let mut px = Pickaxer::default();
     let tx_builder = ckb_types::core::TransactionBuilder::default();
@@ -1086,41 +1091,32 @@ fn test_cobuild_otx_prefix() {
     let tx_builder = tx_builder.output_data(Vec::new().pack());
     let tx_builder = tx_builder.witness(vec![0x00; 102].pack());
 
-    // Append otx
-    let os = schemas::basic::OtxStart::new_builder()
-        .start_cell_deps(2u32.pack())
-        .start_header_deps(0u32.pack())
-        .start_input_cell(1u32.pack())
-        .start_output_cell(1u32.pack())
-        .build();
-    let wl = schemas::top_level::WitnessLayout::new_builder()
-        .set(os)
-        .build();
-    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
-    let otxs = vec![
-        generate_otx_a0(&mut dl, &mut px),
-        generate_otx_b0(&mut dl, &mut px),
-    ];
-    for otx in otxs {
-        for e in otx.cell_deps_iter() {
-            tx_builder = tx_builder.cell_dep(e);
-        }
-        for e in otx.header_deps_iter() {
-            tx_builder = tx_builder.header_dep(e);
-        }
-        for e in otx.inputs().into_iter() {
-            tx_builder = tx_builder.input(e);
-        }
-        for e in otx.outputs().into_iter() {
-            tx_builder = tx_builder.output(e);
-        }
-        for e in otx.outputs_data().into_iter() {
-            tx_builder = tx_builder.output_data(e);
-        }
-        for e in otx.witnesses().into_iter() {
-            tx_builder = tx_builder.witness(e);
-        }
-    }
+    let tx_builder = assemble_otx_with_txbuilder(
+        vec![
+            generate_otx_a0(&mut dl, &mut px),
+            generate_otx_b0(&mut dl, &mut px),
+        ],
+        tx_builder,
+    );
+
+    let tx_builder = {
+        let tx = tx_builder.build();
+        let mut ws: Vec<ckb_testtool::ckb_types::packed::Bytes> =
+            tx.witnesses().into_iter().collect();
+        // Append otx
+        let os = schemas::basic::OtxStart::new_builder()
+            .start_cell_deps(2u32.pack())
+            .start_header_deps(0u32.pack())
+            .start_input_cell(1u32.pack())
+            .start_output_cell(1u32.pack())
+            .build();
+        let wl = schemas::top_level::WitnessLayout::new_builder()
+            .set(os)
+            .build();
+        ws[1] = wl.as_bytes().pack(); // Replace OtxStart
+
+        tx.as_advanced_builder().set_witnesses(ws)
+    };
 
     // Create sign for prefix
     let sign_message =
@@ -1141,6 +1137,13 @@ fn test_cobuild_otx_prefix() {
     let tx_builder = tx_builder.set_witnesses(wb.build().into_iter().collect());
 
     let tx = tx_builder.build();
+
+    (tx, dl)
+}
+
+#[test]
+fn test_cobuild_otx_prefix() {
+    let (tx, dl) = new_otx_prefix_tx();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
     verifier.verify(&tx, &dl).unwrap();
@@ -1148,69 +1151,11 @@ fn test_cobuild_otx_prefix() {
 
 #[test]
 fn test_cobuild_otx_prefix_no_sign() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx_builder = ckb_types::core::TransactionBuilder::default();
+    let (tx, dl) = new_otx_prefix_tx();
+    let mut ws: Vec<ckb_testtool::ckb_types::packed::Bytes> = tx.witnesses().into_iter().collect();
+    ws.remove(0);
+    let tx = tx.as_advanced_builder().set_witnesses(ws).build();
 
-    // Create otx prefix. Add a sighash all only cell for pay fees.
-    let prikey = "000000000000000000000000000000000000000000000000000000000000000f";
-    let (_prikey, args) = get_ckb_key(prikey);
-    let cell_meta_always_success = px.insert_cell_data(&mut dl, &BINARY_ALWAYS_SUCCESS);
-    let cell_meta_demo_lock = px.insert_cell_data(&mut dl, &BINARY_TRANSACTION_COBUILD_LOCK_DEMO);
-    let cell_meta_i = px.insert_cell_fund(
-        &mut dl,
-        px.create_script(&cell_meta_demo_lock, &args),
-        None,
-        &[],
-    );
-    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_always_success));
-    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_demo_lock));
-    let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
-    let tx_builder = tx_builder
-        .output(px.create_cell_output(px.create_script(&cell_meta_always_success, &[]), None));
-    let tx_builder = tx_builder.output_data(Vec::new().pack());
-    // let tx_builder = tx_builder.witness(vec![0x00; 102].pack());
-
-    // Append otx
-    let os = schemas::basic::OtxStart::new_builder()
-        .start_cell_deps(2u32.pack())
-        .start_header_deps(0u32.pack())
-        .start_input_cell(1u32.pack())
-        .start_output_cell(1u32.pack())
-        .build();
-    let wl = schemas::top_level::WitnessLayout::new_builder()
-        .set(os)
-        .build();
-    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
-    let otxs = vec![
-        generate_otx_a0(&mut dl, &mut px),
-        generate_otx_b0(&mut dl, &mut px),
-    ];
-    for otx in otxs {
-        for e in otx.cell_deps_iter() {
-            tx_builder = tx_builder.cell_dep(e);
-        }
-        for e in otx.header_deps_iter() {
-            tx_builder = tx_builder.header_dep(e);
-        }
-        for e in otx.inputs().into_iter() {
-            tx_builder = tx_builder.input(e);
-        }
-        for e in otx.outputs().into_iter() {
-            tx_builder = tx_builder.output(e);
-        }
-        for e in otx.outputs_data().into_iter() {
-            tx_builder = tx_builder.output_data(e);
-        }
-        for e in otx.witnesses().into_iter() {
-            tx_builder = tx_builder.witness(e);
-        }
-    }
-
-    // cobuild_normal_entry -- fetch_seal
-    //  wrong WitnessLayout types
-
-    let tx = tx_builder.build();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
     let err = verifier.verify(&tx, &dl).unwrap_err();
@@ -1219,87 +1164,16 @@ fn test_cobuild_otx_prefix_no_sign() {
 
 #[test]
 fn test_cobuild_otx_prefix_wrong_witnesslayout() {
-    let mut dl = Resource::default();
-    let mut px = Pickaxer::default();
-    let tx_builder = ckb_types::core::TransactionBuilder::default();
+    let (tx, dl) = new_otx_prefix_tx();
+    let mut ws: Vec<ckb_testtool::ckb_types::packed::Bytes> = tx.witnesses().into_iter().collect();
+    ws[0] = {
+        let mut data = ws[0].as_slice().to_vec();
+        data[..32].copy_from_slice(&[0u8; 32]);
 
-    // Create otx prefix. Add a sighash all only cell for pay fees.
-    let prikey = "000000000000000000000000000000000000000000000000000000000000000f";
-    let (prikey, args) = get_ckb_key(prikey);
-    let cell_meta_always_success = px.insert_cell_data(&mut dl, &BINARY_ALWAYS_SUCCESS);
-    let cell_meta_demo_lock = px.insert_cell_data(&mut dl, &BINARY_TRANSACTION_COBUILD_LOCK_DEMO);
-    let cell_meta_i = px.insert_cell_fund(
-        &mut dl,
-        px.create_script(&cell_meta_demo_lock, &args),
-        None,
-        &[],
-    );
-    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_always_success));
-    let tx_builder = tx_builder.cell_dep(px.create_cell_dep(&cell_meta_demo_lock));
-    let tx_builder = tx_builder.input(px.create_cell_input(&cell_meta_i));
-    let tx_builder = tx_builder
-        .output(px.create_cell_output(px.create_script(&cell_meta_always_success, &[]), None));
-    let tx_builder = tx_builder.output_data(Vec::new().pack());
-    let tx_builder = tx_builder.witness(vec![0x00; 102].pack());
+        data.pack()
+    };
+    let tx = tx.as_advanced_builder().set_witnesses(ws).build();
 
-    // Append otx
-    let os = schemas::basic::OtxStart::new_builder()
-        .start_cell_deps(2u32.pack())
-        .start_header_deps(0u32.pack())
-        .start_input_cell(1u32.pack())
-        .start_output_cell(1u32.pack())
-        .build();
-    let wl = schemas::top_level::WitnessLayout::new_builder()
-        .set(os)
-        .build();
-    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
-    let otxs = vec![
-        generate_otx_a0(&mut dl, &mut px),
-        generate_otx_b0(&mut dl, &mut px),
-    ];
-    for otx in otxs {
-        for e in otx.cell_deps_iter() {
-            tx_builder = tx_builder.cell_dep(e);
-        }
-        for e in otx.header_deps_iter() {
-            tx_builder = tx_builder.header_dep(e);
-        }
-        for e in otx.inputs().into_iter() {
-            tx_builder = tx_builder.input(e);
-        }
-        for e in otx.outputs().into_iter() {
-            tx_builder = tx_builder.output(e);
-        }
-        for e in otx.outputs_data().into_iter() {
-            tx_builder = tx_builder.output_data(e);
-        }
-        for e in otx.witnesses().into_iter() {
-            tx_builder = tx_builder.witness(e);
-        }
-    }
-
-    // Create sign for prefix
-    let sign_message =
-        cobuild_create_signing_message_hash_sighash_all_only(tx_builder.clone().build(), &dl);
-    println_hex("smh", &sign_message);
-
-    let seal = sign_pubkey_hash(prikey, &sign_message);
-    println_hex("seal", seal.as_slice());
-    let so = schemas::basic::SighashAllOnly::new_builder()
-        .seal(seal.pack())
-        .build();
-    let wl = schemas::top_level::WitnessLayout::new_builder()
-        .set(so)
-        .build();
-    let mut wl = wl.as_slice().to_vec();
-    wl[0] = 0xfe;
-
-    // assert_eq!(wl.as_bytes().pack().len(), 102);
-    let mut wb = tx_builder.clone().build().witnesses().as_builder();
-    wb.replace(0, wl.pack());
-    let tx_builder = tx_builder.set_witnesses(wb.build().into_iter().collect());
-
-    let tx = tx_builder.build();
     let tx = ckb_types::core::cell::resolve_transaction(tx, &mut HashSet::new(), &dl, &dl).unwrap();
     let verifier = Verifier::default();
     let err = verifier.verify(&tx, &dl).unwrap_err();
@@ -1328,41 +1202,32 @@ fn test_cobuild_otx_prefix_and_suffix() {
     ));
     let tx_builder = tx_builder.output_data(vec![].pack());
 
-    // Append otx
-    let os = schemas::basic::OtxStart::new_builder()
-        .start_cell_deps(1u32.pack())
-        .start_header_deps(0u32.pack())
-        .start_input_cell(1u32.pack())
-        .start_output_cell(1u32.pack())
-        .build();
-    let wl = schemas::top_level::WitnessLayout::new_builder()
-        .set(os)
-        .build();
-    let mut tx_builder = tx_builder.witness(wl.as_bytes().pack());
-    let otxs = vec![
-        generate_otx_a0(&mut dl, &mut px),
-        generate_otx_b0(&mut dl, &mut px),
-    ];
-    for otx in otxs {
-        for e in otx.cell_deps_iter() {
-            tx_builder = tx_builder.cell_dep(e);
-        }
-        for e in otx.header_deps_iter() {
-            tx_builder = tx_builder.header_dep(e);
-        }
-        for e in otx.inputs().into_iter() {
-            tx_builder = tx_builder.input(e);
-        }
-        for e in otx.outputs().into_iter() {
-            tx_builder = tx_builder.output(e);
-        }
-        for e in otx.outputs_data().into_iter() {
-            tx_builder = tx_builder.output_data(e);
-        }
-        for e in otx.witnesses().into_iter() {
-            tx_builder = tx_builder.witness(e);
-        }
-    }
+    let tx_builder = assemble_otx_with_txbuilder(
+        vec![
+            generate_otx_a0(&mut dl, &mut px),
+            generate_otx_b0(&mut dl, &mut px),
+        ],
+        tx_builder,
+    );
+
+    let tx_builder = {
+        let tx = tx_builder.build();
+        let mut ws: Vec<ckb_testtool::ckb_types::packed::Bytes> =
+            tx.witnesses().into_iter().collect();
+        // Append otx
+        let os = schemas::basic::OtxStart::new_builder()
+            .start_cell_deps(1u32.pack())
+            .start_header_deps(0u32.pack())
+            .start_input_cell(1u32.pack())
+            .start_output_cell(1u32.pack())
+            .build();
+        let wl = schemas::top_level::WitnessLayout::new_builder()
+            .set(os)
+            .build();
+        ws[0] = wl.as_bytes().pack(); // Replace OtxStart
+
+        tx.as_advanced_builder().set_witnesses(ws)
+    };
 
     // Create otx suffix. Add a sighash all only cell for pay fees.
     let prikey = "000000000000000000000000000000000000000000000000000000000000000f";
@@ -1500,7 +1365,7 @@ fn test_cobuild_otx_random() {
     }
 
     // n success + n failed.
-    //  unknow error code
+    //  unknown error code
     for _ in 0..32 {
         let mut dl = Resource::default();
         let mut px = Pickaxer::default();
